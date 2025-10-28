@@ -70,24 +70,21 @@ void (* const  _exceptions[CORTEX_M3_EXCEPTIONS])(void) = {
 __attribute__ ((section(".startup")))
 void _Reset_Handler(void)
 {
-    /* Copy the data segment from flash to sram */
-    uint32_t *pSrc = &_flash_sdata;
-    uint32_t *pDest = &_sram_sdata;
+     /* Initialize data section */
+    uint32_t *src = &_flash_sdata;
+    uint32_t *dst = &_sram_sdata;
+    uint32_t size = (uint32_t)(&_sram_edata - &_sram_sdata);
 
-    while(pDest < &_sram_edata)
-    {
-        *pDest = *pSrc;
-        pDest++;
-        pSrc++;
+    for (uint32_t i = 0; i < size; i++) {
+        dst[i] = src[i];
     }
 
-    /* Zero initialize the bss segment in sram */
-    pDest = &_sram_sbss;
+    /* Initialize BSS section */
+    uint32_t *bss_start = &_sram_sbss;
+    uint32_t bss_size = (uint32_t)(&_sram_ebss - &_sram_sbss);
 
-    while(pDest < &_sram_ebss)
-    {
-        *pDest = 0;
-        pDest++;
+    for (uint32_t i = 0; i < bss_size; i++) {
+        bss_start[i] = 0;
     }
 
     /* Call main() */
@@ -99,4 +96,3 @@ void _Reset_Handler(void)
     */
     while(1);
 }
-

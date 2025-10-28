@@ -70,6 +70,16 @@ void usecboot_boot(void);
 int usecboot_get_slot(uint8_t idx, struct usecboot_slot *slot);
 
 /*
+ * The following routine needs to be provided by the port, it should copy
+ * the root pubkey.
+ * The routine should return:
+ *   USECBOOTERR_NONE: requested root pubkey matches len and is set,
+ *   -USECBOOTERR_EINVAL: requested root pubkey len does not match.
+ */
+
+int usecboot_get_rootpkey(void *pkey, size_t len);
+
+/*
  * The following routine needs to be provided by the port, it should provide
  * any rejected pubkey that has the correct length.
  * The routine should return:
@@ -82,6 +92,13 @@ int usecboot_get_slot(uint8_t idx, struct usecboot_slot *slot);
  */
 
 int usecboot_get_rejected_pubkey(uint32_t idx, uint8_t *pubkey, size_t len);
+
+/*
+ * The following routine needs to be provided by the port, it should output
+ * the log message.
+ */
+
+void usecboot_log(const char *fmt, ...);
 
 #ifdef __cplusplus
 }

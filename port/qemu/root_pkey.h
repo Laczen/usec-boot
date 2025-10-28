@@ -1,0 +1,9 @@
+/*
+ * Automatically generated - do not change
+ */
+#ifndef USECBOOT_ROOTPKEY_H_
+#define USECBOOT_ROOTPKEY_H_
+#define USECBOOT_ROOTPKEY \
+	"\x3b\xeb\x9e\x0b\x28\x6c\x73\x87\x44\xd4\x72\x72\x78\xd4\xdd\xee\x6f\x5c\x29" \
+	"\x90\x5f\xf5\x81\xa1\x34\xbd\x9f\xb8\x74\x4d\x52\x35"
+#endif /* USECBOOT_ROOTPKEY_H_ */

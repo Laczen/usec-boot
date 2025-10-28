@@ -4,110 +4,88 @@ OBJCOPY = arm-none-eabi-objcopy
 OBJDUMP = arm-none-eabi-objdump
 SIZE = arm-none-eabi-size
 
+# Build configuration
+BUILD_DIR = build
+TARGET = $(BUILD_DIR)/firmware.elf
+
 # Cortex-M3 flags
 ARCH_FLAGS = -mcpu=cortex-m3 -mthumb -mfloat-abi=soft
-OPT_FLAGS = -Os -ffunction-sections
+OPT_FLAGS = -Os -ffunction-sections -fdata-sections
 WARN_FLAGS = -Wall -Wextra
-DEFINES = -DX25519_NO_UNROLLING
 INCLUDES = -I. -I../../ext/monocypher -I../../src
 
-CFLAGS = $(ARCH_FLAGS) $(OPT_FLAGS) $(WARN_FLAGS) $(DEFINES) $(INCLUDES)
+CFLAGS = $(ARCH_FLAGS) $(OPT_FLAGS) $(WARN_FLAGS) $(INCLUDES)
 LDFLAGS = $(ARCH_FLAGS) -Wl,--gc-sections -Wl,--print-memory-usage
 LDFLAGS += -Tlinker.ld -Wl,-Map=$(BUILD_DIR)/firmware.map
 
-# Build directory
-BUILD_DIR = build
+# Monocypher configuration
+MONOCYPHER_DEFINES = -DX25519_NO_UNROLLING
+
+# Root public key generation
+ROOTPKEY_SCRIPT = ../../scripts/genrootpkeyinclude.py
+ROOTPKEY_INPUT = ../../scripts/public_rootkey.pem
+ROOTPKEY_HEADER = root_pkey.h
 
 # Source files
-LOCAL_SRCS = startup.c $(wildcard *.c)
+LOCAL_SRCS = $(wildcard *.c)
 MONOCYPHER_SRCS = $(wildcard ../../ext/monocypher/*.c)
 SRC_SRCS = $(wildcard ../../src/*.c)
 
-# Combine all sources
-SRC = $(LOCAL_SRCS) $(MONOCYPHER_SRCS) $(SRC_SRCS)
-
-# Object files in build directory
+# Object files
 OBJ = $(addprefix $(BUILD_DIR)/, $(LOCAL_SRCS:.c=.o)) \
       $(addprefix $(BUILD_DIR)/monocypher/, $(notdir $(MONOCYPHER_SRCS:.c=.o))) \
       $(addprefix $(BUILD_DIR)/src/, $(notdir $(SRC_SRCS:.c=.o)))
-
-# Remove duplicates from OBJ
 OBJ := $(sort $(OBJ))
 
-# Target executable
-TARGET = $(BUILD_DIR)/firmware.elf
-
 # Default target
-all: $(BUILD_DIR) $(TARGET)
+all: $(TARGET)
 
-# Create build directory
+# Create build directory structure
 $(BUILD_DIR):
-	@mkdir -p $(BUILD_DIR)/monocypher
-	@mkdir -p $(BUILD_DIR)/src
-LOCAL_SRCS = startup.c $(wildcard *.c)
-MONOCYPHER_SRCS = $(wildcard ../../ext/monocypher/*.c)
-SRC_SRCS = $(wildcard ../../src/*.c)
+	@mkdir -p $(BUILD_DIR)/monocypher $(BUILD_DIR)/src
 
-# Combine all sources
-SRC = $(LOCAL_SRCS) $(MONOCYPHER_SRCS) $(SRC_SRCS)
-
-# Object files in build directory
-OBJ = $(addprefix $(BUILD_DIR)/, $(LOCAL_SRCS:.c=.o)) \
-      $(addprefix $(BUILD_DIR)/monocypher/, $(notdir $(MONOCYPHER_SRCS:.c=.o))) \
-      $(addprefix $(BUILD_DIR)/src/, $(notdir $(SRC_SRCS:.c=.o)))
-
-# Remove duplicates from OBJ
-OBJ := $(sort $(OBJ))
-
-# Target executable
-TARGET = $(BUILD_DIR)/firmware.elf
-
-# Default target
-all: $(BUILD_DIR) $(TARGET)
-
-# Create build directory
-$(BUILD_DIR):
-	@mkdir -p $(BUILD_DIR)/monocypher
-	@mkdir -p $(BUILD_DIR)/src
+# Generate root public key header
+$(ROOTPKEY_HEADER): $(ROOTPKEY_SCRIPT) $(ROOTPKEY_INPUT)
+	@echo "Generating root public key header"
+	python3 $(ROOTPKEY_SCRIPT) $(ROOTPKEY_INPUT) > $@
 
 # Compilation rules
-$(BUILD_DIR)/%.o: %.c | $(BUILD_DIR)
-
-# Compilation rules
-$(BUILD_DIR)/%.o: %.c | $(BUILD_DIR)
+$(BUILD_DIR)/%.o: %.c | $(BUILD_DIR) $(ROOTPKEY_HEADER)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/monocypher/%.o: ../../ext/monocypher/%.c | $(BUILD_DIR)
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) $(MONOCYPHER_DEFINES) -c $< -o $@
 
 $(BUILD_DIR)/src/%.o: ../../src/%.c | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-# Link
+# Link executable
 $(TARGET): $(OBJ) linker.ld
-	$(CC) $(LDFLAGS) $(OBJ) -o $(TARGET)
+	$(CC) $(LDFLAGS) $(OBJ) -o $@
 	@echo "Build complete:"
-	@$(SIZE) $(TARGET)
+	@$(SIZE) $@
 
-# Binary for flashing
+# Create binary for flashing
 $(BUILD_DIR)/firmware.bin: $(TARGET)
-	$(OBJCOPY) -O binary $(TARGET) $(BUILD_DIR)/firmware.bin
+	$(OBJCOPY) -O binary $< $@
 
-# QEMU target
+# QEMU emulation
 qemu: $(BUILD_DIR)/firmware.bin
 	@echo "Starting QEMU..."
-	qemu-system-arm -M lm3s6965evb -kernel $(BUILD_DIR)/firmware.bin -nographic -monitor telnet:127.0.0.1:1234,server,nowait
+	qemu-system-arm -M lm3s6965evb \
+		-device loader,file=$(BUILD_DIR)/firmware.bin,addr=0x00000000 \
+		-device loader,file=../../scripts/signed_image.bin,addr=0x00010000 \
+		-nographic -monitor telnet:127.0.0.1:1234,server,nowait
 
-# Generate size information
+# Analysis targets
 size: $(TARGET)
-	$(SIZE) $(TARGET)
+	@$(SIZE) $<
 
-# Debug info
 disasm: $(TARGET)
-	$(OBJDUMP) -S $(TARGET) > $(BUILD_DIR)/firmware.disasm
+	$(OBJDUMP) -S $< > $(BUILD_DIR)/firmware.disasm
 
-# Clean
+# Cleanup
 clean:
-	rm -rf $(BUILD_DIR)
+	rm -rf $(BUILD_DIR) $(ROOTPKEY_HEADER)
 
-.PHONY: all clean qemu disasm
+.PHONY: all clean qemu size disasm

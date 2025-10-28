@@ -72,4 +72,10 @@ STRUCT_PACKED usecboot_pubkey_tlv {
 	struct usecboot_signature_tlv signature;
 };
 
+#ifdef CONFIG_USECBOOT_LOG
+#define USECBOOT_LOG(arg) usecboot_log(arg)
+#else
+#define USECBOOT_LOG(arg) ((void)0)
+#endif
+
 #endif /* INCLUDE_USECBOOT_PRIV_H_ */

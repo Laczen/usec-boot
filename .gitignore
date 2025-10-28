@@ -45,3 +45,10 @@
 # Test Modules and Compile Results
 test/build
 test/unity
+build/
+
+# key files
+*.pem
+
+# vscode files
+*.code-workspace
