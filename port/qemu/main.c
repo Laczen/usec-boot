@@ -4,16 +4,16 @@
 #include "../../src/usecboot.h"
 #include "root_pkey.h"
 
-#define FLASH_BASE 0x00010000
+#define IMAGE_BASE 0x00010000
 volatile uint8_t* lm3s6965_uart0 = (uint8_t*)0x4000C000;
 
 void *memcpy(void *dst, const void *src, size_t len);
 void uart_puts(const char *str);
 
-int init(const struct usecboot_slot *slot)
+int prep(const struct usecboot_slot *slot)
 {
 	(void)slot;
-	usecboot_log("INIT called\n");
+	usecboot_log("PREP called\n");
 	return USECBOOTERR_NONE;
 }
 
@@ -21,9 +21,9 @@ int read(const struct usecboot_slot *slot, uint32_t start, void *data,
 	 size_t len)
 {
 	(void)slot;
-	void *flash_ptr = (void *)(FLASH_BASE + start);
+	void *flash_ptr = (void *)(IMAGE_BASE + start);
 
-	usecboot_log("Doing read at %x len %d\n", FLASH_BASE + start, len);
+	usecboot_log("Doing read at %x len %d\n", IMAGE_BASE + start, len);
 	memcpy(data, flash_ptr, len);
 	return USECBOOTERR_NONE;
 }
@@ -41,7 +41,7 @@ void clean(const struct usecboot_slot *slot)
 }
 
 struct usecboot_slotapi api = {
-	.init = init,
+	.prep = prep,
 	.read = read,
 	.boot = boot,
 	.clean = clean,

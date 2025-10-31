@@ -50,5 +50,8 @@ build/
 # key files
 *.pem
 
-# vscode files
+# vscode and python
 *.code-workspace
+*.venv
+*.__pycache__
+*.egginfo

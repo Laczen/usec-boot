@@ -12,12 +12,6 @@
 #ifndef INCLUDE_USECBOOT_PRIV_H_
 #define INCLUDE_USECBOOT_PRIV_H_
 
-#if defined(STRUCT_PACKED)
-#undef STRUCT_PACKED
-#endif
-
-#define STRUCT_PACKED struct __attribute__((__packed__))
-
 /* TAGS 0x10..0x1f are reserved for signatures */
 #define USECBOOT_SIGN_TAG_ED25519	0x10
 
@@ -39,11 +33,7 @@
 #endif
 
 #include <stdint.h>
-
-STRUCT_PACKED usecboot_tlv_hdr {
-	uint8_t tag;
-	uint8_t len;
-};
+#include "usecboot.h"
 
 STRUCT_PACKED usecboot_magic_tlv {
 	struct usecboot_tlv_hdr hdr;

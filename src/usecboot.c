@@ -1,6 +1,5 @@
 #include <stdbool.h>
 #include "monocypher-ed25519.h"
-#include "usecboot.h"
 #include "usecboot_priv.h"
 
 #ifndef CONFIG_USECBOOT_MAX_HDRSIZE
@@ -279,7 +278,7 @@ void usecboot_boot(void)
 			break;
 		}
 
-		if ((slot.api->init != NULL) &&
+		if ((slot.api->prep != NULL) &&
 		    (slot.api->read != NULL) &&
 		    (slot.api->boot != NULL))
 		{
@@ -291,15 +290,15 @@ void usecboot_boot(void)
 		}
 
 		if ((slot.state = USECBOOTSS_PREP) &&
-		    (slot.api->init(&slot) == 0)) {
+		    (slot.api->prep(&slot) == 0)) {
 			USECBOOT_LOG("STATE CHANGED TO INIT");
-			slot.state = USECBOOTSS_INIT;
+			slot.state = USECBOOTSS_VRFY;
 		} else {
-			USECBOOT_LOG("INIT FAILED\n");
+			USECBOOT_LOG("PREP FAILED\n");
 			usecboot_wipe(&slot, sizeof(slot));
 		}
 
-		if ((slot.state == USECBOOTSS_INIT) &&
+		if ((slot.state == USECBOOTSS_VRFY) &&
 		    (usecboot_brdy(&slot) == 0)) {
 			USECBOOT_LOG("STATE CHANGED TO BRDY");
 			slot.state = USECBOOTSS_BRDY;

@@ -22,8 +22,8 @@ LDFLAGS += -Tlinker.ld -Wl,-Map=$(BUILD_DIR)/firmware.map
 MONOCYPHER_DEFINES = -DX25519_NO_UNROLLING
 
 # Root public key generation
-ROOTPKEY_SCRIPT = ../../scripts/genrootpkeyinclude.py
-ROOTPKEY_INPUT = ../../scripts/public_rootkey.pem
+ROOTPKEY_SCRIPT = ../../scripts/usectool.py
+ROOTPKEY_INPUT = "genrootpkinclude keys/root_pubkey.pem --output root_pkey.h"
 ROOTPKEY_HEADER = root_pkey.h
 
 # Source files

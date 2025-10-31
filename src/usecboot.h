@@ -12,6 +12,12 @@
 #ifndef INCLUDE_USECBOOT_H_
 #define INCLUDE_USECBOOT_H_
 
+#if defined(STRUCT_PACKED)
+#undef STRUCT_PACKED
+#endif
+
+#define STRUCT_PACKED struct __attribute__((__packed__))
+
 #include <stdint.h>
 #include <stddef.h>
 
@@ -22,7 +28,7 @@ extern "C" {
 enum usecboot_slotstate {
 	USECBOOTSS_NONE,
 	USECBOOTSS_PREP,
-	USECBOOTSS_INIT,
+	USECBOOTSS_VRFY,
 	USECBOOTSS_BRDY,
 	USECBOOTSS_SKIP,
 };
@@ -37,7 +43,7 @@ enum usecboot_error {
 struct usecboot_slot;
 
 struct usecboot_slotapi {
-	int (*init)(const struct usecboot_slot *slot);
+	int (*prep)(const struct usecboot_slot *slot);
 	int (*read)(const struct usecboot_slot *slot, uint32_t start, void *data,
 		  size_t len);
 	void (*boot)(const struct usecboot_slot *slot);
@@ -50,12 +56,41 @@ struct usecboot_slot {
 	struct usecboot_slotapi *api;
 };
 
+STRUCT_PACKED usecboot_tlv_hdr {
+	uint8_t tag;
+	uint8_t len;
+};
+
 /*
  * The following routine is used by the port, it is the only routine that
  * needs to be called in main and will never return
  */
 
 void usecboot_boot(void);
+
+/* The following routine can be used by the port to retrieve custom TLV's
+ * in the slot routines prep, read, boot or clean. This can be used e.g.
+ * to check if there is a match between the board and the firmware.
+ * To get a specific tlv: fill in the tlv header of a pointer to the
+ * desired tlv with the TAG and the size and call usecboot_get_tlv.
+ *
+ * E.g. to get a image version that has been added to a tlv as:
+ * struct version_tlv {
+ *      usecboot_tlv_hdr hdr;
+ *      uint8_t major;
+ *      uint8_t minor;
+ *      uint16_t patch;
+ * };
+ * struct version_tlv version = {
+ *	.hdr.tag = 0x31,
+ *      .hdr.len = sizeof(version),
+ * };
+ * rc = usecboot_get_tlv(slot, &version, NULL);
+ *
+ */
+
+int usecboot_get_tlv(const struct usecboot_slot *slot,
+		     void *tlv, uint32_t *pos)
 
 /*
  * The following routine needs to be provided by the port, it should setup
