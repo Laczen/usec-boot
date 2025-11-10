@@ -21,9 +21,8 @@ LDFLAGS += -Tlinker.ld -Wl,-Map=$(BUILD_DIR)/firmware.map
 # Monocypher configuration
 MONOCYPHER_DEFINES = -DX25519_NO_UNROLLING
 
+USECTOOL = usectool
 # Root public key generation
-ROOTPKEY_SCRIPT = ../../scripts/usectool.py
-ROOTPKEY_INPUT = "genrootpkinclude keys/root_pubkey.pem --output root_pkey.h"
 ROOTPKEY_HEADER = root_pkey.h
 
 # Source files
@@ -45,9 +44,9 @@ $(BUILD_DIR):
 	@mkdir -p $(BUILD_DIR)/monocypher $(BUILD_DIR)/src
 
 # Generate root public key header
-$(ROOTPKEY_HEADER): $(ROOTPKEY_SCRIPT) $(ROOTPKEY_INPUT)
+$(ROOTPKEY_HEADER):
 	@echo "Generating root public key header"
-	python3 $(ROOTPKEY_SCRIPT) $(ROOTPKEY_INPUT) > $@
+	$(USECTOOL) genrootpkeyinclude keys/root_public.pem -o $@
 
 # Compilation rules
 $(BUILD_DIR)/%.o: %.c | $(BUILD_DIR) $(ROOTPKEY_HEADER)
@@ -69,13 +68,41 @@ $(TARGET): $(OBJ) linker.ld
 $(BUILD_DIR)/firmware.bin: $(TARGET)
 	$(OBJCOPY) -O binary $< $@
 
+$(BUILD_DIR)/signed_image1.bin: $(TARGET)
+	@echo "Generating test image"
+	$(USECTOOL) genimage testimages/image1.bin -k keys/key0_private.pem -s keys/signed_pkey.bin -o $@
+
+$(BUILD_DIR)/bad_signed_image1.bin: $(TARGET)
+	@echo "Generating test image"
+	$(USECTOOL) genimage testimages/image1.bin -k keys/root_private.pem -s keys/signed_pkey.bin -o $@
+
+$(BUILD_DIR)/signed_image2.bin: $(TARGET)
+	@echo "Generating test image"
+	$(USECTOOL) genimage testimages/image2.bin -k keys/key0_private.pem -s keys/signed_pkey.bin -o $@
+
 # QEMU emulation
-qemu: $(BUILD_DIR)/firmware.bin
+qemu: $(BUILD_DIR)/firmware.bin $(BUILD_DIR)/signed_image1.bin $(BUILD_DIR)/signed_image2.bin
 	@echo "Starting QEMU..."
 	qemu-system-arm -M lm3s6965evb \
 		-device loader,file=$(BUILD_DIR)/firmware.bin,addr=0x00000000 \
-		-device loader,file=../../scripts/signed_image.bin,addr=0x00010000 \
+		-device loader,file=$(BUILD_DIR)/signed_image1.bin,addr=0x00010000 \
+		-device loader,file=$(BUILD_DIR)/signed_image2.bin,addr=0x00020000 \
 		-nographic -monitor telnet:127.0.0.1:1234,server,nowait
+
+qemu-bad: $(BUILD_DIR)/firmware.bin $(BUILD_DIR)/bad_signed_image1.bin $(BUILD_DIR)/signed_image2.bin
+	@echo "Starting QEMU..."
+	qemu-system-arm -M lm3s6965evb \
+		-device loader,file=$(BUILD_DIR)/firmware.bin,addr=0x00000000 \
+		-device loader,file=$(BUILD_DIR)/bad_signed_image1.bin,addr=0x00010000 \
+		-device loader,file=$(BUILD_DIR)/signed_image2.bin,addr=0x00020000 \
+		-nographic -monitor telnet:127.0.0.1:1234,server,nowait
+
+qemu-dbg: $(BUILD_DIR)/firmware.bin $(BUILD_DIR)/signed_image1.bin
+	@echo "Starting QEMU..."
+	qemu-system-arm -M lm3s6965evb \
+		-device loader,file=$(BUILD_DIR)/firmware.bin,addr=0x00000000 \
+		-device loader,file=$(BUILD_DIR)/signed_image1.bin,addr=0x00010000 \
+		-nographic -s -S
 
 # Analysis targets
 size: $(TARGET)

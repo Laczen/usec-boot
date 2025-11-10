@@ -50,17 +50,18 @@ def load_user_script(script_path):
               help='Header size in bytes (default: 512)')
 @click.option('--user-script', '-u', default=None,
               help='Python script that adds custom TLVs before signing')
-def main(firmware, private_key, password, signed_key, header_size, user_script):
+@click.option('--output', '-o', default=None,
+              help='Output filename for signed firmware (default: {firmware}_signed.bin)')
+def main(firmware, private_key, password, signed_key, header_size, user_script, output):
     """
     Generate signed firmware image using Ed25519 signature.
 
     FIRMWARE: Input firmware file to sign (required)
-
-    Output file will be generated as {firmware}_signed.bin
     """
     try:
-        # Generate output filename
-        output = f"{firmware}_signed.bin"
+        # Generate output filename if not specified
+        if output is None:
+            output = f"{firmware}_signed.bin"
 
         # Load private key
         click.echo(f"Loading private key from: {private_key}")
@@ -76,7 +77,7 @@ def main(firmware, private_key, password, signed_key, header_size, user_script):
         ihash = sha512_hash(firmware_data[header_size:])
 
         # Create hash TLV
-        hashtlv_fmt = '< B B I I 64s'
+        hashtlv_fmt = '> B B I I 64s'
         hashtlv_size = struct.calcsize(hashtlv_fmt)
         hashtlv = struct.pack(
             hashtlv_fmt,
@@ -109,7 +110,7 @@ def main(firmware, private_key, password, signed_key, header_size, user_script):
         signature = key.sign(hdr)
 
         # Create signature TLV
-        sigtlv_fmt = '< B B I 64s'
+        sigtlv_fmt = '> B B I 64s'
         sigtlv_fmt_size = struct.calcsize(sigtlv_fmt)
         sigtlv = struct.pack(
             sigtlv_fmt,

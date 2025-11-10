@@ -1,7 +1,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdarg.h>
-#include "../../src/usecboot.h"
+#include "usecboot.h"
 #include "root_pkey.h"
 
 #ifndef container_of
@@ -10,26 +10,47 @@
     (type *)((char *)__mptr - offsetof(type, member)); })
 #endif
 
-#define IMAGE1_BASE 0x00010000
-#define IMAGE2_BASE 0x00020000
+#define IMAGE1_BASE 0x00020000
+#define IMAGE2_BASE 0x00040000
 #define HMAC_KEY "\xab\x23\x45\x56"
+
+#include <stdint.h>
+
+#define PERIPH_BASE        0x40000000UL
+
+#define AHB1PERIPH_BASE    (PERIPH_BASE + 0x00020000UL)
+#define APB1PERIPH_BASE    (PERIPH_BASE + 0x00000000UL)
+
+#define RCC_BASE           (AHB1PERIPH_BASE + 0x3800UL)
+#define GPIOA_BASE         (AHB1PERIPH_BASE + 0x0000UL)
+#define USART2_BASE        (APB1PERIPH_BASE + 0x4400UL)
+
+#define RCC_AHB1ENR        (*(volatile unsigned long *)(RCC_BASE + 0x30))
+#define RCC_APB1ENR        (*(volatile unsigned long *)(RCC_BASE + 0x40))
+
+#define GPIOA_MODER        (*(volatile unsigned long *)(GPIOA_BASE + 0x00))
+#define GPIOA_AFRL         (*(volatile unsigned long *)(GPIOA_BASE + 0x20))
+
+#define USART2_SR          (*(volatile unsigned long *)(USART2_BASE + 0x00))
+#define USART2_DR          (*(volatile unsigned long *)(USART2_BASE + 0x04))
+#define USART2_BRR         (*(volatile unsigned long *)(USART2_BASE + 0x08))
+#define USART2_CR1         (*(volatile unsigned long *)(USART2_BASE + 0x0C))
+#define USART2_CR2         (*(volatile unsigned long *)(USART2_BASE + 0x10))
+#define USART2_CR3         (*(volatile unsigned long *)(USART2_BASE + 0x14))
+
+#define GPIOA_ODR          (*(volatile uint32_t*)(GPIOA_BASE + 0x14))
 
 struct myslot {
 	uint32_t offset;
 	struct usecboot_slot slot;
 };
 
-volatile uint8_t* lm3s6965_uart0 = (uint8_t*)0x4000C000;
-
 void *memcpy(void *dst, const void *src, size_t len);
 void uart_puts(const char *str);
 
 int prep(const struct usecboot_slot *slot)
 {
-	uint8_t hmac[32]={0};
-
-	(void)usecboot_hmac_vrfy(slot, 0, slot->size, (uint8_t *)HMAC_KEY,
-		                 sizeof(HMAC_KEY) - 1, hmac, sizeof(hmac));
+	(void)slot;
 	return USECBOOTERR_NONE;
 }
 
@@ -50,10 +71,6 @@ void boot(const struct usecboot_slot *slot, uint32_t ioff)
 	const uint32_t app_address = myslot->offset + ioff;
     	const uint32_t initial_sp = *(volatile uint32_t*)app_address;
 	const uint32_t reset_handler = *(volatile uint32_t*)(app_address + 4);
-	uint8_t hmac[32];
-
-	(void)usecboot_hmac_calc(slot, 0, slot->size, (uint8_t *)HMAC_KEY,
-		                 sizeof(HMAC_KEY) - 1, hmac, sizeof(hmac));
 
 	__asm volatile ("dsb; isb");
 	__asm volatile ("cpsid i");
@@ -120,13 +137,20 @@ int usecboot_get_rootpkey(void *pkey, size_t len)
 	return 0;
 }
 
+void led_init(void);
+void led_toggle(int cnt);
+void uart_init(void);
+
 int main(void)
 {
+	led_init();
+	led_toggle(1);
+	uart_init();
 	usecboot_boot();
     	return 0;
 }
 
-/* provide a minimal memcpy and logging routine */
+/* provide a minimal memcpy, memset and some other routines */
 void *memcpy(void *dst, const void *src, size_t len)
 {
 	uint8_t *dst8 = (uint8_t *)dst;
@@ -139,15 +163,67 @@ void *memcpy(void *dst, const void *src, size_t len)
 	return dst;
 }
 
+void led_init(void)
+{
+	// Setup LED
+	RCC_AHB1ENR |= (1 << 0);
+	GPIOA_MODER |= (1 << 10);
+}
+
+void led_toggle(int cnt)
+{
+	while (cnt != 0) {
+		GPIOA_ODR ^= (1 << 5);
+        	for(volatile int i = 0; i < 10000; i++);
+		cnt--;
+	}
+}
+
+void uart_clear_dr(void)
+{
+	// Read the DR register to clear any stale data
+	volatile uint32_t dummy = USART2_DR;
+	(void)dummy; // Prevent unused variable warning
+}
+
+void uart_init(void) {
+	// Enable clocks
+	RCC_AHB1ENR |= (1 << 0);
+	RCC_APB1ENR |= (1 << 17);
+
+	// Configure GPIO
+	GPIOA_MODER &= ~((3 << (2*2)) | (3 << (3*2)));
+	GPIOA_MODER |=  ((2 << (2*2)) | (2 << (3*2)));
+	GPIOA_AFRL &= ~((0xF << (2*4)) | (0xF << (3*4)));
+	GPIOA_AFRL |=  ((7 << (2*4)) | (7 << (3*4)));
+
+	// Clear any stale data from DR
+	uart_clear_dr();
+
+	// Set baud rate
+	USART2_BRR = 0x08B;
+
+	// Clear any pending status flags by reading SR
+	volatile uint32_t status = USART2_SR;
+	(void)status;
+
+	USART2_CR1 |= (1 << 13);  // UE first
+	for(volatile int i = 0; i < 1000; i++);  // Wait for baud rate to stabilize
+
+	// NOW enable transmitter
+	USART2_CR1 |= (1 << 3) | (1 << 2);  // TE + RE
+}
+
 void uart_putc(char c)
 {
-	*lm3s6965_uart0 = c;
+	while (!(USART2_SR & (1 << 7)));  // Wait for TXE
+	USART2_DR = c;
 }
 
 void uart_puts(const char *str) {
-    while (*str) {
-        uart_putc(*str++);
-    }
+	while (*str) {
+		uart_putc(*str++);
+	}
 }
 
 void uart_puthex(uint32_t val) {

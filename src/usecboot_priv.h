@@ -19,9 +19,8 @@
  * bootloader size small. There is no need to support multiple tags
  * for the stored hashes and pubkeys. Let us defined the used tags
  */
-#define USECBOOT_MAGIC_TAG	0x00
 #define USECBOOT_END_TAG	0xFF
-#define USECBOOT_MAGIC		0x55534543 /* USEC */
+#define USECBOOT_END_LEN	0x00
 #define USECBOOT_SIGN_TAG	USECBOOT_SIGN_TAG_ED25519
 #define USECBOOT_PKEY_TAG	0x20
 #define USECBOOT_HASH_TAG	0x21
@@ -30,20 +29,15 @@
 #define USECBOOT_HASH_SIZE 64
 #define USECBOOT_PKEY_SIZE 32
 #define USECBOOT_SIGN_SIZE 64
+#define USECBOOT_HMAC_SIZE 64
 #endif
 
-#include <stdint.h>
 #include "usecboot.h"
-
-STRUCT_PACKED usecboot_magic_tlv {
-	struct usecboot_tlv_hdr hdr;
-	uint32_t magic;
-};
 
 STRUCT_PACKED usecboot_hash_tlv {
 	struct usecboot_tlv_hdr hdr;
-	uint32_t offset;
-	uint32_t msg_size;
+	uint8_t offset[4];	/* offset from start of header in big endian */
+	uint8_t msg_size[4];	/* message size in big endian */
 	uint8_t hash[USECBOOT_HASH_SIZE];
 };
 
@@ -52,7 +46,7 @@ STRUCT_PACKED usecboot_hash_tlv {
  */
 STRUCT_PACKED usecboot_signature_tlv {
 	struct usecboot_tlv_hdr hdr;
-	uint32_t msg_size;
+	uint8_t msg_size[4];	/* message size in big endian */
 	uint8_t signature[USECBOOT_SIGN_SIZE];
 };
 
@@ -62,10 +56,12 @@ STRUCT_PACKED usecboot_pubkey_tlv {
 	struct usecboot_signature_tlv signature;
 };
 
+#define CONFIG_USECBOOT_LOG 1
+
 #ifdef CONFIG_USECBOOT_LOG
-#define USECBOOT_LOG(arg) usecboot_log(arg)
+#define USECBOOT_LOG(...) usecboot_log(__VA_ARGS__)
 #else
-#define USECBOOT_LOG(arg) ((void)0)
+#define USECBOOT_LOG(...) ((void)0)
 #endif
 
 #endif /* INCLUDE_USECBOOT_PRIV_H_ */

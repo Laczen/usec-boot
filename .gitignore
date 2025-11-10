@@ -53,5 +53,5 @@ build/
 # vscode and python
 *.code-workspace
 *.venv
-*.__pycache__
+__pycache__
 *.egginfo

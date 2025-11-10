@@ -83,7 +83,7 @@ def create_signed_public_key(
     signature = private_rootkey.sign(public_bytes)
 
     # Create a struct for the signed pubkey
-    sigtlv_fmt = '< B B I 64s'
+    sigtlv_fmt = '> B B I 64s'
     sigtlv_fmt_size = struct.calcsize(sigtlv_fmt)
     pkey_sigtlv = struct.pack(
         sigtlv_fmt,
@@ -93,7 +93,7 @@ def create_signed_public_key(
         bytes(signature)
     )
 
-    pkeytlv_fmt = f'< B B 32s {sigtlv_fmt_size}s'
+    pkeytlv_fmt = f'> B B 32s {sigtlv_fmt_size}s'
     pkeytlv_fmt_size = struct.calcsize(pkeytlv_fmt)
     pkeytlv = struct.pack(
         pkeytlv_fmt,

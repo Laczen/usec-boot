@@ -20,18 +20,11 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <stdarg.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-enum usecboot_slotstate {
-	USECBOOTSS_NONE,
-	USECBOOTSS_PREP,
-	USECBOOTSS_VRFY,
-	USECBOOTSS_BRDY,
-	USECBOOTSS_SKIP,
-};
 
 enum usecboot_error {
 	USECBOOTERR_NONE = 0,	 /* No error */
@@ -42,18 +35,17 @@ enum usecboot_error {
 
 struct usecboot_slot;
 
-struct usecboot_slotapi {
+STRUCT_PACKED usecboot_slotapi {
 	int (*prep)(const struct usecboot_slot *slot);
-	int (*read)(const struct usecboot_slot *slot, uint32_t start, void *data,
-		  size_t len);
-	void (*boot)(const struct usecboot_slot *slot);
+	int (*read)(const struct usecboot_slot *slot, uint32_t start,
+		    void *data, size_t len);
+	void (*boot)(const struct usecboot_slot *slot, uint32_t ioff);
 	void (*clean)(const struct usecboot_slot *slot);
 };
 
-struct usecboot_slot {
-	void *ctx;
-	enum usecboot_slotstate state;
-	struct usecboot_slotapi *api;
+STRUCT_PACKED usecboot_slot {
+	const size_t size;
+	const struct usecboot_slotapi *api;
 };
 
 STRUCT_PACKED usecboot_tlv_hdr {
@@ -90,19 +82,52 @@ void usecboot_boot(void);
  */
 
 int usecboot_get_tlv(const struct usecboot_slot *slot,
-		     void *tlv, uint32_t *pos)
+		     void *tlv, uint32_t *pos);
 
-/*
- * The following routine needs to be provided by the port, it should setup
- * the ctx and api pointers and not modify anything else.
+/* The following routine can be used by the port to calculate a hmac over
+ * a certain range of data in a slot. The routine uses the read routine
+ * provided in the slot api.
  *
- * The routine should return:
- *    USECBOOTERR_NONE: everything OK,
- *    -USECBOOTERR_ENOENT: no more slots,
- *    -USECBOOTERR_EFAULT: something went wrong,
+ * Parameters:
+ * slot:     the slot where data resides,
+ * off:      start position of data,
+ * len:	     length of data,
+ * key:      pointer to private key used in hmac,
+ * key_len:  length of the key,
+ * hmac:     hmac output,
+ * hmac_len: length of the hmac,
+ * Return: -USECBOOTERR_EFAULT on failure, 0 otherwise.
  */
 
-int usecboot_get_slot(uint8_t idx, struct usecboot_slot *slot);
+int usecboot_hmac_calc(const struct usecboot_slot *slot, uint32_t off,
+		       size_t len, const uint8_t *key, size_t key_len,
+		       uint8_t *hmac, size_t hmac_len);
+
+/* The following routine can be used by the port to verify a hmac over
+ * a certain range of data in a slot. The routine uses the read routine
+ * provided in the slot api.
+ *
+ * Parameters:
+ * slot:     the slot where data resides,
+ * off:      start position of data,
+ * len:	     length of data,
+ * key:      pointer to private key used in hmac,
+ * key_len:  length of the key,
+ * hmac:     hmac input,
+ * hmac_len: length of the hmac,
+ * Return: 0 on match, 1 otherwise.
+ */
+
+int usecboot_hmac_vrfy(const struct usecboot_slot *slot, uint32_t off,
+		       size_t len, const uint8_t *key, size_t key_len,
+		       const uint8_t *hmac, size_t hmac_len);
+
+/*
+ * The following routine needs to be provided by the port, it should return
+ * a pointer to the slot or NULL in case of invalid idx or error.
+ */
+
+const struct usecboot_slot *usecboot_get_slot(uint8_t idx);
 
 /*
  * The following routine needs to be provided by the port, it should copy
